@@ -2,135 +2,175 @@
 #include <stdlib.h>
 #include <time.h>
 
-// --- Definições e Constantes ---
-#define TAMANHO_FILA 5
-#define TIPOS_PECAS "IOTLJSZ" // Tipos possíveis de peças do Tetris
+// --- Constantes ---
+#define TAM_FILA 5
+#define TAM_PILHA 3
+#define TIPOS_PECAS "IOTLJSZ"
 
-// --- Estruturas de Dados ---
+// --- Estruturas ---
 
-// Estrutura para representar uma Peça
 typedef struct {
-    int id;      // Identificador único (ex: 1, 2, 3...)
-    char nome;   // Tipo da peça (ex: 'T', 'I')
+    int id;
+    char nome;
 } Peca;
 
-// Estrutura para a Fila Circular
+// Estrutura da FILA (Circular)
 typedef struct {
-    Peca itens[TAMANHO_FILA];
-    int inicio;
-    int fim;
-    int quantidade; // Controla quantos itens existem na fila
+    Peca itens[TAM_FILA];
+    int inicio, fim, quantidade;
 } FilaCircular;
+
+// Estrutura da PILHA (Linear - Reserva)
+typedef struct {
+    Peca itens[TAM_PILHA];
+    int topo; // Índice do elemento no topo (-1 se vazia)
+} PilhaReserva;
 
 // --- Funções Auxiliares ---
 
-// Função para gerar uma nova peça aleatória
 Peca gerarPeca() {
-    static int contadorId = 1; // Variável estática mantém valor entre chamadas
+    static int contadorId = 1;
     Peca p;
-    
     p.id = contadorId++;
-    // Escolhe uma letra aleatória da string TIPOS_PECAS
-    p.nome = TIPOS_PECAS[rand() % 7]; 
-    
+    p.nome = TIPOS_PECAS[rand() % 7];
     return p;
 }
 
-// Inicializa a fila (zera os índices)
-void inicializarFila(FilaCircular *f) {
+// --- Gerenciamento da FILA ---
+
+void initFila(FilaCircular *f) {
     f->inicio = 0;
     f->fim = 0;
     f->quantidade = 0;
 }
 
-// Insere uma peça no final da fila (Enqueue)
 void enfileirar(FilaCircular *f, Peca p) {
-    if (f->quantidade == TAMANHO_FILA) {
-        printf("⚠️  Erro: A fila está cheia!\n");
-        return;
-    }
-    
+    if (f->quantidade == TAM_FILA) return; // Fila cheia (segurança)
     f->itens[f->fim] = p;
-    // Lógica Circular: se chegar no fim do array, volta para o índice 0
-    f->fim = (f->fim + 1) % TAMANHO_FILA; 
+    f->fim = (f->fim + 1) % TAM_FILA;
     f->quantidade++;
 }
 
-// Remove a peça da frente (Dequeue) e retorna ela
 Peca desenfileirar(FilaCircular *f) {
-    Peca p = {0, ' '}; // Peça vazia para erro
-    
-    if (f->quantidade == 0) {
-        printf("⚠️  Erro: A fila está vazia!\n");
-        return p;
-    }
-    
+    Peca p = {0, ' '};
+    if (f->quantidade == 0) return p;
     p = f->itens[f->inicio];
-    // Lógica Circular: move o início para frente
-    f->inicio = (f->inicio + 1) % TAMANHO_FILA; 
+    f->inicio = (f->inicio + 1) % TAM_FILA;
     f->quantidade--;
-    
     return p;
 }
 
-// Exibe o estado atual da fila
-void visualizarFila(FilaCircular f) {
-    printf("\n=== 🧩 PRÓXIMAS PEÇAS (Fila) ===\n");
-    printf("[ SAÍDA ] <--- ");
-    
-    int i, idx;
-    for (i = 0; i < f.quantidade; i++) {
-        // Calcula o índice real no array circular
-        idx = (f.inicio + i) % TAMANHO_FILA;
-        printf("(%d: %c) ", f.itens[idx].id, f.itens[idx].nome);
-    }
-    
-    printf("<--- [ ENTRADA ]\n");
-    printf("================================\n");
+// --- Gerenciamento da PILHA (NOVIDADE) ---
+
+void initPilha(PilhaReserva *p) {
+    p->topo = -1; // Indica pilha vazia
 }
 
-// --- Função Principal ---
+// Push: Adicionar no topo
+int push(PilhaReserva *p, Peca peca) {
+    if (p->topo == TAM_PILHA - 1) {
+        return 0; // Erro: Pilha cheia (Overflow)
+    }
+    p->topo++;
+    p->itens[p->topo] = peca;
+    return 1; // Sucesso
+}
+
+// Pop: Remover do topo
+Peca pop(PilhaReserva *p) {
+    Peca vazia = {0, ' '};
+    if (p->topo == -1) {
+        return vazia; // Erro: Pilha vazia (Underflow)
+    }
+    Peca pecaRemovida = p->itens[p->topo];
+    p->topo--;
+    return pecaRemovida;
+}
+
+// --- Visualização ---
+
+void visualizarEstado(FilaCircular f, PilhaReserva p) {
+    printf("\n========================================\n");
+    
+    // Mostra a PILHA
+    printf("📦 RESERVA (Pilha - Max 3): ");
+    if (p.topo == -1) {
+        printf("[ Vazia ]");
+    } else {
+        // Percorre do topo até a base
+        printf("[ Topo: ");
+        for (int i = p.topo; i >= 0; i--) {
+            printf("(%c) ", p.itens[i].nome);
+        }
+        printf("Base ]");
+    }
+    
+    // Mostra a FILA
+    printf("\n🚀 PRÓXIMAS (Fila):      [ SAÍDA ] <--- ");
+    for (int i = 0; i < f.quantidade; i++) {
+        int idx = (f.inicio + i) % TAM_FILA;
+        printf("%c ", f.itens[idx].nome);
+    }
+    printf("<--- [ ENTRADA ]\n");
+    printf("========================================\n");
+}
+
+// --- Main ---
+
 int main() {
     FilaCircular fila;
+    PilhaReserva pilha;
     int opcao;
     
-    // Inicializa o gerador de números aleatórios
     srand(time(NULL));
+    initFila(&fila);
+    initPilha(&pilha);
     
-    // 1. Inicialização do Sistema
-    inicializarFila(&fila);
-    
-    printf("⚡ Sistema Iniciado. Gerando as 5 primeiras peças...\n");
-    for(int i = 0; i < TAMANHO_FILA; i++) {
-        enfileirar(&fila, gerarPeca());
-    }
+    // Enche a fila inicial
+    for(int i=0; i<TAM_FILA; i++) enfileirar(&fila, gerarPeca());
 
-    // Loop do Menu
     do {
-        visualizarFila(fila);
+        visualizarEstado(fila, pilha);
         
-        printf("\n🎮 MENU TETRIS STACK:\n");
-        printf("1. Jogar peça atual (Dequeue)\n");
+        printf("1. JOGAR peça da fila (Dequeue)\n");
+        printf("2. RESERVAR peça da fila (Push na Pilha)\n");
+        printf("3. USAR peça da reserva (Pop da Pilha)\n");
         printf("0. Sair\n");
-        printf("Escolha: ");
+        printf("👉 Escolha: ");
         scanf("%d", &opcao);
+        
+        printf("\n----------------------------------------\n");
 
         if (opcao == 1) {
-            // Passo A: Jogar a peça da frente
-            Peca jogada = desenfileirar(&fila);
-            printf("\n🚀 Você jogou a peça: [%c] (ID: %d)\n", jogada.nome, jogada.id);
-            
-            // Passo B: Repor automaticamente
-            printf("🔄 Gerando nova peça para o final da fila...\n");
-            enfileirar(&fila, gerarPeca());
-            
-            // Pequena pausa para leitura (opcional)
-            // system("pause"); // No Windows
-            // getchar(); 
+            // JOGAR: Remove da fila e repõe
+            Peca p = desenfileirar(&fila);
+            printf("🎮 Você jogou a peça: [%c] (ID: %d)\n", p.nome, p.id);
+            enfileirar(&fila, gerarPeca()); // Reposição automática
+        }
+        else if (opcao == 2) {
+            // RESERVAR: Tira da fila -> Coloca na Pilha
+            // Primeiro verificamos se a pilha aguenta
+            if (pilha.topo < TAM_PILHA - 1) {
+                Peca p = desenfileirar(&fila);
+                push(&pilha, p);
+                printf("💾 Peça [%c] guardada na reserva!\n", p.nome);
+                enfileirar(&fila, gerarPeca()); // Reposição automática na fila
+            } else {
+                printf("⚠️  ALERTA: A Reserva está cheia! Jogue ou use uma peça.\n");
+            }
+        }
+        else if (opcao == 3) {
+            // USAR RESERVA: Tira da Pilha e Joga
+            if (pilha.topo >= 0) {
+                Peca p = pop(&pilha);
+                printf("♻️  Reserva recuperada! Jogando peça: [%c] (ID: %d)\n", p.nome, p.id);
+                // Nota: Aqui NÃO enfileiramos nada, pois a peça veio da pilha, não da fila.
+            } else {
+                printf("⚠️  ALERTA: A Reserva está vazia!\n");
+            }
         }
 
     } while (opcao != 0);
 
-    printf("Fim do jogo!\n");
     return 0;
 }
